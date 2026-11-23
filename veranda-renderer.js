@@ -36,6 +36,12 @@
     rightWedge: {plate:"right",crop:[365,106,354]},
     shade: {plate:"roof",crop:[245,111,454]}
   };
+  // The wall-detail photographs have masonry returns on both sides of the door.
+  // Survey points are on the joint between brick and paving in the 900 × 600 plate.
+  const wallDetails={
+    left: {file:"zijwand-links.webp", pavement:[[279,450],[581,408]]},
+    right: {file:"zijwand-rechts.webp", pavement:[[215,400],[692,432]]}
+  };
   const finishes = {
     antraciet: [72, 74, 73],
     zwart: [39, 39, 38],
@@ -47,16 +53,17 @@
   const baseURL=document.currentScript.src;
   const images=new Map(), latest=new WeakMap();
   const backingWidth=1536, backingHeight=1024;
-  function loadPlate(name) {
-    if(images.has(name)) return images.get(name);
+  function loadPlate(view) {
+    const file=wallDetails[view]?.file || plates[closer[view]?.plate || view].file;
+    if(images.has(file)) return images.get(file);
     const image=new Image();
     const loaded=new Promise((resolve,reject)=>{
       image.onload=()=>resolve(image);
-      image.onerror=()=>{images.delete(name);reject(new Error("Kan het tuinbeeld niet laden: "+name));};
+      image.onerror=()=>{images.delete(file);reject(new Error("Kan het tuinbeeld niet laden: "+view));};
     });
     const asset={image,loaded};
-    images.set(name,asset);
-    const url=new URL(plates[name].file,baseURL);
+    images.set(file,asset);
+    const url=new URL(file,baseURL);
     url.search=new URL(baseURL).search;
     image.src=url.href;
     return asset;
@@ -251,35 +258,72 @@
       const x=which==="left" ? left : right;
       return {length:d, at:(s,z)=>[x,s,z]};
     }
+    // Fit a sill between the photographed threshold at the rear and the front
+    // post's footplate. The roof and the horizontal panel courses stay level.
+    function rearFloor(x) {
+      const [[x0,y0],[x1,y1]]=wallDetails[view].pavement;
+      const point=[x,0,0], [px,py]=platePoint(point);
+      const pavementY=y0+(px-x0)*(y1-y0)/(x1-x0);
+      return (pavementY-py)*distance(point)/matrix[1][2];
+    }
+    function wallShadows(x,material) {
+      if(!material || material==="open")return;
+      const rear=rearFloor(x);
+      const strip=width=>[[x-width,0,rear],[x+width,0,rear],[x+width,d,0],[x-width,d,0]];
+      ctx.save();
+      if(material==="aluminium") {
+        const height=eave-12;
+        const dx=-.21*height, dy=.17*height;
+        ctx.filter="blur(2.4px)";
+        fill([[x,0,rear],[x,d,0],[x+dx,d+dy,0],[x+dx,dy,rear*(1-dy/d)]],
+          "rgba(49,45,41,.19)");
+      }
+      ctx.filter="blur(1.7px)";
+      fill(strip(10),"rgba(43,36,29,.19)");
+      ctx.filter="blur(.6px)";
+      fill(strip(5),"rgba(37,32,28,.32)");
+      ctx.restore();
+    }
     function wall(which,material) {
       if(material==="open" || !material) return;
       const {length,at}=sidePlane(which);
       const high=eave-12;
       const quad=(s0,s1,lo,hi)=>[at(s0,lo),at(s1,lo),at(s1,hi),at(s0,hi)];
+      const hasSill=Boolean(wallDetails[view]) && which!=="front";
+      const x=which==="left" ? left : right;
+      const rear=hasSill ? rearFloor(x) : 0;
+      const fromSill=(s0,s1,lo,hi)=>[
+        at(s0,lo+rear*(1-s0/length)),at(s1,lo+rear*(1-s1/length)),at(s1,hi),at(s0,hi)
+      ];
       if(material==="aluminium") {
-        fill(quad(0,length,0,high),flank);
+        fill(fromSill(0,length,0,high),flank);
         for(let z=2;z<high;z+=13) {
           line(at(0,z),at(length,z),seam,1.15);
           line(at(0,z+1.25),at(length,z+1.25),edge,.68);
         }
       } else {
         const panels=material==="schuifpui"?Math.max(2,Math.round(length/138)):Math.max(2,Math.round(length/88));
-        glazing(quad(0,length,2,high),"glas");
+        glazing(fromSill(0,length,2,high),"glas");
         for(let i=1;i<panels;i++){
           const s=i*length/panels;
-          if(material==="schuifpui") fill(quad(s-2.0,s+2.0,2,high),bare);
+          if(material==="schuifpui") fill(fromSill(s-2.0,s+2.0,2,high),bare);
           else {
-            fill(quad(s-.7,s+1.2,3,high-1),"rgba(101,137,129,.42)");
-            line(at(s,3),at(s,high-1),rgba(235,247,240,.79),.8);
-            line(at(s+2,3),at(s+2,high-1),rgba(77,106,103,.4),.6);
+            fill(fromSill(s-.7,s+1.2,3,high-1),"rgba(101,137,129,.42)");
+            line(at(s,3+rear*(1-s/length)),at(s,high-1),rgba(235,247,240,.79),.8);
+            line(at(s+2,3+rear*(1-(s+2)/length)),at(s+2,high-1),rgba(77,106,103,.4),.6);
           }
         }
         const handle = (material==="schuifpui" ? 1/panels : .94)*length - 4;
         fill(quad(handle-1.1,handle+1.1,101,115),flank);
         line(at(handle-1.1,101),at(handle-1.1,115),edge,.65);
       }
-      fill(quad(0,length,0,material==="schuifpui"?5:3),bare);
-      line(at(0,3.8),at(length,3.8),edge,.8);
+      if(hasSill) {
+        const height=material==="schuifpui" ? 5 : 3.8;
+        profile(x-2.8,x+2.8,0,length,rear+height,height,height);
+      } else {
+        fill(quad(0,length,0,material==="schuifpui"?5:3),bare);
+        line(at(0,3.8),at(length,3.8),edge,.8);
+      }
       fill(quad(0,length,high-2.5,high),flank);
     }
     function wedge(which,material) {
@@ -353,6 +397,10 @@
     }
 
     if(view!=="lighting")shadows();
+    if(wallDetails[view]) {
+      wallShadows(left,cfg.left);
+      wallShadows(right,cfg.right);
+    }
     // Flashing sits directly on the measured facade plane, with a thin shadow
     // under the ledger and a raised lip closing the top edge against the brick.
     const bottom=mountingHeight-10.4;
@@ -370,7 +418,8 @@
       if ((!panel || panel==="open") && (!infill || infill==="geen")) return;
       const x=sideX(name);
       const top=mountingHeight-7;
-      const base=panel && panel!=="open" ? 0 : eave-12;
+      const ground=wallDetails[view] ? rearFloor(x) : 0;
+      const base=panel && panel!=="open" ? ground : eave-12;
       profile(x-2.6,x+2.6,.4,5.1,top,top,top-base);
     }
     sideWall(far);
@@ -395,7 +444,7 @@
     if(!Object.hasOwn(plates,key))return Promise.reject(new Error("Onbekend fotoaanzicht: "+view));
     const token={}, snapshot={color:"antraciet",roof:"glas-helder",...config};
     latest.set(canvas,token);
-    const asset=loadPlate(key);
+    const asset=loadPlate(view);
     const draw=image=>{
       if(latest.get(canvas)!==token)return;
       paint(canvas,snapshot,view,plates[key],image);

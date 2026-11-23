@@ -44,7 +44,7 @@ h1 span { color: var(--accent); }
 .gallery, .choice-panel { border-radius: 15px; }
 .gallery { aspect-ratio: 3 / 2; overflow: hidden; position: sticky; top: 14px; align-self: start; isolation: isolate; background: #dce1d7; color: white; }
 #preview-canvas { display: block; width: 100%; height: auto; aspect-ratio: 3 / 2; }
-#preview-canvas { background: url("tuin.webp?v=vrije-wanden") center / cover no-repeat; }
+#preview-canvas { background: url("tuin.webp?v=aangesloten-zijwanden") center / cover no-repeat; }
 .circle, .dialog-close { display: inline-flex; align-items: center; justify-content: center; }
 .circle { border-radius: 50%; width: 37px; height: 37px; border: 1px solid #ffffff95; background: #26332c8c; color: white; padding: 8px; }
 .circle:hover { background: #25372dec; }
