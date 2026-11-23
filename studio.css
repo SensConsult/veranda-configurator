@@ -67,6 +67,8 @@ label:has(.choice-radio:focus-visible) { outline: 3px solid #6f9347; outline-off
 .finish-sample, .roof-sample { display: block; position: relative; width: 100%; height: 100%; border-radius: inherit; }
 .finish-sample, .roof-sample { background-image: url("materiaalstalen.webp"); background-size: 400% 200%; background-repeat: no-repeat; }
 .finish-sample { background-color: var(--sample-color); box-shadow: inset 0 -4px 0 var(--sample-color); }
+.part-sample { display: block; width: 100%; height: 100%; background-image: url("onderdelen.webp"); background-size: 400% 300%; background-repeat: no-repeat; }
+.empty-sample { display: grid; place-items: center; height: 100%; color: #78877b; font-size: 1.4rem; }
 .finish-sample.antraciet { background-position: 0 0; }
 .finish-sample.zwart { background-position: 33.333% 0; }
 .finish-sample.grijs { background-position: 66.667% 0; }
@@ -91,9 +93,6 @@ label:has(.choice-radio:focus-visible) { outline: 3px solid #6f9347; outline-off
 .size-note:empty { display: none; }
 .dimension-field > span { display: block; font-size: .91rem; font-weight: 600; margin-bottom: 7px; }
 .dimensions-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 15px 12px; }
-.dimensions-grid:has(select[name="left"]), .dimensions-grid:has(select[name="shade"]) { grid-template-columns: 1fr; gap: 11px; }
-.dimensions-grid:has(select[name="left"]) .dimension-field, .dimensions-grid:has(select[name="shade"]) .dimension-field { display: grid; grid-template-columns: minmax(80px,.65fr) minmax(0,1.65fr); align-items: center; gap: 8px; }
-.dimensions-grid:has(select[name="left"]) .dimension-field > span, .dimensions-grid:has(select[name="shade"]) .dimension-field > span { margin: 0; }
 #step-content > .dimensions-grid, #step-content > .dimension-field { margin-top: 19px; }
 .dimension-field { display: block; min-width: 0; }
 .dimension-field select, .dimension-field input { border: 1px solid #bdc9c0; border-radius: 7px; background-color: white; width: 100%; min-height: 43px; padding: 9px 10px; color: var(--ink); font-size: 1rem; }
@@ -140,17 +139,8 @@ dialog::backdrop { background: #10251cbd; }
 }
 @media(max-width: 365px) {
   .dimensions-grid { grid-template-columns: 1fr; }
-  .dimensions-grid:has(select[name="left"]) .dimension-field, .dimensions-grid:has(select[name="shade"]) .dimension-field { display: block; }
-  .dimensions-grid:has(select[name="left"]) .dimension-field > span, .dimensions-grid:has(select[name="shade"]) .dimension-field > span { margin-bottom: 4px; }
   .panel-actions:has(.back-button:not([hidden])) #step-counter { flex-basis: 100%; }
   .panel-actions #next { margin-left: auto; }
 }
 @media (max-height: 480px) and (orientation: landscape) { .gallery { position: relative; top: auto; } }
 @media (min-width: 500px) and (max-width: 680px) { .gallery { max-width: min(100%, 55svh); align-self: center; } }
-
-@container (max-width: 290px) {
-  .dimensions-grid:has(select[name="left"]) .dimension-field,
-  .dimensions-grid:has(select[name="shade"]) .dimension-field { display: block; }
-  .dimensions-grid:has(select[name="left"]) .dimension-field > span,
-  .dimensions-grid:has(select[name="shade"]) .dimension-field > span { margin-bottom: 4px; }
-}

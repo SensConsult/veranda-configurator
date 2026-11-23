@@ -1,17 +1,41 @@
 (() => {
   "use strict";
 
-  // World axes follow the facade (x), the paving towards the viewer (y) and height (z), in cm.
-  // Both vanishing points lie on the photographed horizon. All sizes use this same camera.
-  const VIEW_WIDTH = 900, VIEW_HEIGHT = 600;
-  function project([x, y, z]) {
-    const across = .00053 * x, outward = -.00065 * y;
-    const distance = 1 + across + outward;
-    return [
-      (352 + 1760 * across - 49 * outward) / distance,
-      (416 + 344 * (across + outward) - .88 * z) / distance
-    ];
-  }
+  const VIEW_WIDTH=900, VIEW_HEIGHT=600;
+  // Each camera is calibrated independently against the four corners of the patio
+  // door and the paving lines. The common world origin is below the centre of the
+  // opening; x follows the facade, y the terrace, and z is height, all in cm.
+  const plates={
+    overview: {
+      file:"tuin.webp", crop:[0,0,900], eye:[-355,1265,102],
+      matrix:[[0.91052991,-0.085,0,431.16524217],[0.18694017,-0.208,-0.80164315,411.36182336],[0.00053561,-0.00064,0,1]]
+    },
+    roof: {
+      file:"tuin-dak.webp", crop:[233,109,480], eye:[-542,2281,1255],
+      matrix:[[0.76696672,0.037,-0.09106991,445.40253566],[-0.04331537,0.203,-0.64112704,318.45166403],[0.00017116,-0.00027,-0.00023219,1]]
+    },
+    left: {
+      file:"tuin-links.webp", crop:[269,194,449], eye:[-792,1035,140],
+      matrix:[[0.79389928,0.14886258,0,474.57168345],[0.30031655,-0.09350705,-0.61639619,420.64897842],[0.00086331,-0.00031169,0,1.00604317]]
+    },
+    right: {
+      file:"tuin-rechts.webp", crop:[204,151,519], eye:[600,1286,132],
+      matrix:[[0.38225455,-0.5,0,413.57958788],[-0.20768485,-0.148,-0.74838619,413.89752727],[-0.0006303,-0.000493,0,1.01197576]]
+    },
+    front: {
+      file:"tuin-voor.webp", crop:[92,112,715], eye:[-3,2128,367],
+      matrix:[[0.842,-0.21,0,449.5],[0,-0.055,-0.82325581,419],[0,-0.00047,0,1]]
+    },
+    lighting: {
+      file:"tuin-licht.webp", crop:[0,0,900], eye:[-220,475,74],
+      matrix:[[1.72865334,-0.31370608,0.09846249,522.02789764],[0.47045919,-1.28894798,-1.39603128,819.0576251],[0.00067168,-0.00182475,0.0001963,1]]
+    }
+  };
+  const closer={
+    leftWedge: {plate:"left",crop:[271,160,346]},
+    rightWedge: {plate:"right",crop:[365,106,354]},
+    shade: {plate:"roof",crop:[245,111,454]}
+  };
   const finishes = {
     antraciet: [72, 74, 73],
     zwart: [39, 39, 38],
@@ -20,35 +44,91 @@
   const rgba = (r,g,b,a) => `rgba(${r},${g},${b},${a})`;
   const mixTone = (rgb, light) => `rgb(${rgb.map(v => Math.max(0, Math.min(255, v + light))).join(",")})`;
 
-  const garden = new Image();
-  const ready = new Promise((resolve, reject) => {
-    garden.onload = resolve;
-    garden.onerror = () => reject(new Error("Het tuinbeeld kon niet worden geladen."));
-  });
-  const gardenFile = new URL("./tuin.webp", document.currentScript.src);
-  garden.src = gardenFile.href;
-  const pending = new WeakMap();
-  const backingWidth = 1536, backingHeight = 1024;
+  const baseURL=document.currentScript.src;
+  const images=new Map(), latest=new WeakMap();
+  const backingWidth=1536, backingHeight=1024;
+  function loadPlate(name) {
+    if(images.has(name)) return images.get(name);
+    const image=new Image();
+    const loaded=new Promise((resolve,reject)=>{
+      image.onload=()=>resolve(image);
+      image.onerror=()=>{images.delete(name);reject(new Error("Kan het tuinbeeld niet laden: "+name));};
+    });
+    const asset={image,loaded};
+    images.set(name,asset);
+    image.src=new URL(plates[name].file,baseURL).href;
+    return asset;
+  }
+  const ready=loadPlate("overview").loaded;
+  ready.then(()=>{
+    for(const key of Object.keys(plates)) if(key!=="overview") loadPlate(key).loaded.catch(()=>{});
+  }).catch(()=>{});
 
-  function paint(canvas, cfg) {
+  function paint(canvas,cfg,view,plate,garden) {
     if (canvas.width !== backingWidth || canvas.height !== backingHeight) {
       canvas.width = backingWidth;
       canvas.height = backingHeight;
     }
     const ctx = canvas.getContext("2d");
     ctx.setTransform(backingWidth / VIEW_WIDTH, 0, 0, backingHeight / VIEW_HEIGHT, 0, 0);
-    ctx.drawImage(garden,0,0,VIEW_WIDTH,VIEW_HEIGHT);
-
     const w = Math.max(300,Math.min(700,Number(cfg.width) || 500));
     const d = Math.max(200,Math.min(cfg.roof === "glas-helder" ? 400 : 600, Number(cfg.depth) || 300));
     const left = -w / 2, right = w / 2;
-    const topAt = y => 270 - .051 * y;
+    const mountingHeight=263;
+    const topAt = y => mountingHeight - .051 * y;
     const eave = topAt(d);
     const color = finishes[cfg.color] || finishes.antraciet;
     const spans = Math.ceil(w / 89);
     const span = w / spans;
 
+    const matrix=plate.matrix, eye=plate.eye, above=eye[2]>mountingHeight;
+    const source=(point,row)=>matrix[row][0]*point[0]+matrix[row][1]*point[1]+matrix[row][2]*point[2]+matrix[row][3];
+    const distance=point=>source(point,2);
+    function platePoint(point) {
+      const z=Math.max(.12,distance(point));
+      return [source(point,0)/z,source(point,1)/z];
+    }
+    const base=closer[view]?.crop || plate.crop;
+    const framing=(function(){
+      if(view==="overview" || view==="lighting" || view.endsWith("Wedge")) return base;
+      let focus;
+      if(view==="roof" || view==="shade") focus=[
+        [left,0,mountingHeight],[right,0,mountingHeight],[left,d,eave],[right,d,eave]
+      ];
+      else if(view==="front") focus=[[left,d,0],[right,d,0],[left,d,eave],[right,d,eave]];
+      else {
+        const side=view==="left"?left:right;
+        focus=[[side,0,0],[side,d,0],[side,0,mountingHeight],[side,d,eave]];
+      }
+      const border=12;
+      const coords=focus.map(platePoint);
+      const x0=Math.min(base[0],...coords.map(p=>p[0]-border));
+      const x1=Math.max(base[0]+base[2],...coords.map(p=>p[0]+border));
+      const y0=Math.min(base[1],...coords.map(p=>p[1]-border));
+      const y1=Math.max(base[1]+base[2]*2/3,...coords.map(p=>p[1]+border));
+      const cw=Math.min(900,Math.max(x1-x0,(y1-y0)*1.5));
+      return [Math.max(0,Math.min(900-cw,(x0+x1-cw)/2)),Math.max(0,Math.min(600-cw*2/3,(y0+y1-cw*2/3)/2)),cw];
+    })();
+    const [ox,oy,cropWidth]=framing, zoom=900/cropWidth;
+    const sx=garden.naturalWidth/900, sy=garden.naturalHeight/600;
+    ctx.drawImage(garden,ox*sx,oy*sy,cropWidth*sx,cropWidth*2/3*sy,0,0,900,600);
+    const project=p=>{const [x,y]=platePoint(p);return [(x-ox)*zoom,(y-oy)*zoom];};
+    function nearClip(points,closed) {
+      if(view!=="lighting"||points.every(p=>distance(p)>=.12)) return points;
+      const out=[];
+      let a=closed?points.at(-1):points[0], za=distance(a);
+      for(const b of points){
+        const zb=distance(b);
+        if((za>=.12)!==(zb>=.12)){
+          const t=(.12-za)/(zb-za);out.push(a.map((v,i)=>v+(b[i]-v)*t));
+        }
+        if(zb>=.12)out.push(b);
+        a=b;za=zb;
+      }
+      return out;
+    }
     function path(points) {
+      points=nearClip(points,true);
       ctx.beginPath();
       for (let i=0; i<points.length; i++) {
         const [x,y] = project(points[i]);
@@ -62,6 +142,9 @@
       ctx.fill();
     }
     function line(a,b,style,width=1) {
+      const clipped=nearClip([a,b],false);
+      if(clipped.length<2) return;
+      [a,b]=clipped;
       const [x,y] = project(a), [xx,yy] = project(b);
       ctx.beginPath(); ctx.moveTo(x,y);ctx.lineTo(xx,yy);
       ctx.strokeStyle = style; ctx.lineWidth = width; ctx.stroke();
@@ -85,10 +168,12 @@
     function profile(x0,x1,y0,y1,z0,z1,t) {
       const p=[x0,y0,z0], q=[x1,y0,z0], r=[x1,y1,z1], s=[x0,y1,z1];
       const bottom = ([x,y,z]) => [x,y,z-t];
-      fill([bottom(p),bottom(q),bottom(r),bottom(s)],underside);
-      fill([p,s,bottom(s),bottom(p)],flank);
-      fill([s,r,bottom(r),bottom(s)],bare);
-      if (Math.max(z0,z1) < 82) fill([p,q,r,s],bright);
+      if(eye[2]<Math.max(z0,z1)) fill([bottom(p),bottom(q),bottom(r),bottom(s)],underside);
+      if(eye[0]<x0) fill([p,s,bottom(s),bottom(p)],flank);
+      if(eye[0]>x1) fill([q,r,bottom(r),bottom(q)],bright);
+      if(eye[1]>y1) fill([s,r,bottom(r),bottom(s)],bare);
+      if(eye[1]<y0) fill([p,q,bottom(q),bottom(p)],flank);
+      if(eye[2]>Math.max(z0,z1)) fill([p,q,r,s],bright);
       line(s,r,edge,.64);
       line(s,bottom(s),rgba(211,217,208,.23),.58);
       line(bottom(s),bottom(r),seam,.52);
@@ -108,7 +193,7 @@
       const frontPosts = w >= 600 ? [left,0,right] : [left,right];
       ctx.save();
       ctx.filter="blur(1.7px)";
-      fill([shadow(left,0,270),shadow(right,0,270),shadow(right,d,eave),shadow(left,d,eave)],
+      fill([shadow(left,0,mountingHeight),shadow(right,0,mountingHeight),shadow(right,d,eave),shadow(left,d,eave)],
         cfg.shade==="met" || cfg.roof.endsWith("opaal") ? "rgba(36,40,44,.18)" : "rgba(43,54,59,.065)");
       for(let i=0;i<=spans;i++) fill(alongRafter(left+span*i),"rgba(44,40,37,.14)");
       for (const x of frontPosts) {
@@ -127,7 +212,9 @@
     // Window coatings transmit the background and reflect a little of the same sky and foliage.
     function glazing(points, kind, isRoof=false) {
       const opal = kind.includes("opaal");
-      const screen = points.map(project);
+      const visible=nearClip(points,true);
+      if(visible.length<3)return;
+      const screen=visible.map(project);
       const xs=screen.map(p=>p[0]), ys=screen.map(p=>p[1]);
       const x=Math.min(...xs), y=Math.min(...ys), rw=Math.max(...xs)-x, rh=Math.max(...ys)-y;
       if(rw<.1 || rh<.1) return;
@@ -140,10 +227,12 @@
       fill(points,grad);
       ctx.save();path(points);ctx.clip();
       ctx.globalAlpha=opal ? .035 : isRoof ? .13 : .095;
-      // Reflections are continuous across adjoining glazing panels.
-      ctx.translate(VIEW_WIDTH, isRoof ? 260 : 40);
-      ctx.scale(-1, isRoof ? -.64 : .93);
-      ctx.drawImage(garden,0,0,VIEW_WIDTH,VIEW_HEIGHT);
+      // A subtle sky reflection stays on the glazing. The unmodified garden photo
+      // beneath the structure always uses its single, uniform photographic crop.
+      const reflection=plate===plates.roof?[710,6,175,125]:
+        plate===plates.lighting?[650,0,170,102]:[610,4,215,141];
+      ctx.drawImage(garden,reflection[0]*sx,reflection[1]*sy,reflection[2]*sx,reflection[3]*sy,
+        x,y,rw,rh);
       ctx.restore();
       ctx.save();path(points);ctx.clip();
       ctx.fillStyle=gradient([x,y+rh],[x+rw,y],[
@@ -211,44 +300,49 @@
       line(at(0,low+.9),at(d,low+.9),edge,.66);
     }
 
+    function awning() {
+      if(cfg.shade!=="met")return;
+      const end=d*.77, margin=4.2;
+      const fabric=(x,y)=>[x,y,topAt(y)+4.2];
+      const stripe=gradient(project(fabric(left,0)),project(fabric(right,end)),[
+        [0,"#b5aa91"],[.28,"#d1c5a9"],[.76,"#dbceb0"],[1,"#bfb093"]
+      ]);
+      fill([fabric(left+margin,2),fabric(right-margin,2),fabric(right-margin,end),fabric(left+margin,end)],stripe);
+      for(let y=5;y<end;y+=3)line(fabric(left+margin,y),fabric(right-margin,y),"rgba(91,79,56,.12)",.48);
+      profile(left-margin,left+margin,1,d,topAt(1)+6,eave+6,3);
+      profile(right-margin,right+margin,1,d,topAt(1)+6,eave+6,3);
+      profile(left-margin,right+margin,1,7,mountingHeight+8,topAt(7)+8,5.6);
+      profile(left+margin,right-margin,end-1.6,end+1.6,topAt(end)+5.4,topAt(end)+5.4,2.9);
+    }
     function roof() {
       const at=(x,y)=>[x,y,topAt(y)];
-      const points=(a,b,y0,y1)=>[at(a,y0),at(b,y0),at(b,y1),at(a,y1)];
-      glazing(points(left,right,0,d),cfg.roof,true);
+      if(!above)awning();
+      glazing([at(left,0),at(right,0),at(right,d),at(left,d)],cfg.roof,true);
       if(cfg.roof.startsWith("poly")) {
-        for(let x=left+1.8;x<right;x+=2.4) {
-          line(at(x,0),at(x,d),rgba(115,145,143,.34),.6);
-          line(at(x+.7,0),at(x+.7,d),rgba(243,246,236,.52),.55);
+        const underside=view==="lighting";
+        const pitch=underside?5.8:2.4;
+        for(let x=left+1.8;x<right;x+=pitch) {
+          line(at(x,0),at(x,d),rgba(115,145,143,underside ? .16 : .34),underside ? .8 : .6);
+          if(!underside)line(at(x+.7,0),at(x+.7,d),rgba(243,246,236,.52),.55);
         }
       }
-      if(cfg.shade==="met") {
-        const extended=d*.77;
-        for(let i=0;i<spans;i++) {
-          const x0=left+i*span+2.4, x1=x0+span-4.8;
-          const awning=(y,x)=>[x,y,topAt(y)-5];
-          const stripe=gradient(project(awning(0,x0)),project(awning(extended,x1)),[
-            [0,"#a69b83"],[.28,"#c7bca2"],[.77,"#d1c4a8"],[1,"#b6a78b"]
-          ]);
-          fill([awning(0,x0),awning(0,x1),awning(extended,x1),awning(extended,x0)],stripe);
-          for(let y=5;y<extended;y+=3) {
-            line(awning(y,x0),awning(y,x1),"rgba(90,76,53,.13)",.54);
-          }
-        }
-        profile(left,right,extended-1.7,extended+1.7,topAt(extended)-4,topAt(extended)-4,2.9);
-      }
-      for(let i=spans;i>=0;i--) {
-        const x=left+i*span;
+      for(let n=0;n<=spans;n++) {
+        const i=eye[0]>0?n:spans-n, x=left+i*span;
         const rafterWidth= i===0 || i===spans ? 5.2 : 3.8;
         profile(x-rafterWidth/2,x+rafterWidth/2,1,d,topAt(1)+.3,eave+.3,6.1);
-        if(cfg.led==="koud" || cfg.led==="warm") {
+        if(!above && (cfg.led==="koud" || cfg.led==="warm"))
           for(const y of [d*.37,d*.74]) spotlight([x,y,topAt(y)-6.3],cfg.led==="warm");
-        }
       }
+      if(above)awning();
     }
     function spotlight(pos,warm) {
-      const [x,y]=project(pos), scale=1/(1+.00053*pos[0]-.00065*pos[1]);
+      if(distance(pos)<.12)return;
+      const [x,y]=project(pos), probe=project([pos[0]+2,pos[1],pos[2]]);
+      const scale=Math.min(8,Math.max(.55,Math.hypot(probe[0]-x,probe[1]-y)/2));
       const spread=(warm?10:6)*scale, hue=warm?"255,209,128":"218,238,255";
-      ctx.save(); ctx.translate(x,y);ctx.scale(1,.69);
+      ctx.save();ctx.translate(x,y);ctx.scale(1,.69);
+      ctx.beginPath();ctx.ellipse(0,0,2.5*scale,2.1*scale,0,0,Math.PI*2);
+      ctx.fillStyle="#494e4c";ctx.fill();
       const glow=ctx.createRadialGradient(0,0,0,0,0,spread);
       glow.addColorStop(0,`rgba(${hue},.8)`);glow.addColorStop(.28,`rgba(${hue},.23)`);glow.addColorStop(1,`rgba(${hue},0)`);
       ctx.fillStyle=glow;ctx.fillRect(-spread,-spread,spread*2,spread*2);
@@ -256,33 +350,44 @@
       ctx.restore();
     }
 
-    shadows();
-    profile(left-2,right+2,0,6,270.5,270.2,10.5);
-    // The fixed viewpoint is in front and to the left of the veranda.
-    wall("right",cfg.right);
-    wedge("right",cfg.rightWedge);
-    post(right,d,9,eave-5.8);
-    roof();
-    wall("front",cfg.front);
-    wall("left",cfg.left);
-    wedge("left",cfg.leftWedge);
-    if(w>=600) post(0,d,9,eave-5.8);
-    post(left,d,9,eave-5.8);
+    if(view!=="lighting")shadows();
+    // Flashing sits directly on the measured facade plane, with a thin shadow
+    // under the ledger and a raised lip closing the top edge against the brick.
+    const bottom=mountingHeight-10.4;
+    fill([[left-2,0,bottom],[right+2,0,bottom],[right+2,0,bottom-3.1],[left-2,0,bottom-3.1]],"rgba(35,30,27,.26)");
+    profile(left-2,right+2,-.25,4.7,mountingHeight+1.6,mountingHeight+.9,11.2);
+    profile(left-2,right+2,-.35,.8,mountingHeight+3.1,mountingHeight+3.1,2.3);
+    const near=eye[0]>0?"right":"left",far=near==="left"?"right":"left";
+    const sideX=name=>name==="left"?left:right;
+    const sideWall=name=>{wall(name,cfg[name]);wedge(name,cfg[name+"Wedge"]);};
+    sideWall(far);
+    post(sideX(far),d,9,eave-5.8);
+    if(!above)roof();
+    if(eye[1]>d || above)wall("front",cfg.front);
+    sideWall(near);
+    if(w>=600)post(0,d,9,eave-5.8);
+    post(sideX(near),d,9,eave-5.8);
+    if(above)roof();
     profile(left-5,right+5,d-4.5,d+5.3,eave+1,eave+1,12.4);
     line([left-5,d+5.3,eave-9.7],[right+5,d+5.3,eave-9.7],rgba(198,199,185,.29),.72);
-    profile(left-4.5,left+2.2,1,d-4.5,topAt(1)+1,eave+1,7.8);
+    const nx=sideX(near);
+    profile(nx-3.3,nx+3.3,1,d-4.5,topAt(1)+1,eave+1,7.8);
   }
 
-  function render(canvas,config) {
-    const snapshot={ color:"antraciet",roof:"glas-helder",...config };
-    pending.set(canvas,snapshot);
-    if(garden.complete && garden.naturalWidth) {
-      paint(canvas,snapshot);
-      return Promise.resolve();
-    }
-    return ready.then(() => {
-      if(pending.get(canvas) === snapshot) paint(canvas,snapshot);
-    });
+  function render(canvas,config,view="overview") {
+    const key=closer[view]?.plate || view;
+    if(!Object.hasOwn(plates,key))return Promise.reject(new Error("Onbekend fotoaanzicht: "+view));
+    const token={}, snapshot={color:"antraciet",roof:"glas-helder",...config};
+    latest.set(canvas,token);
+    const asset=loadPlate(key);
+    const draw=image=>{
+      if(latest.get(canvas)!==token)return;
+      paint(canvas,snapshot,view,plates[key],image);
+      canvas.dataset.view=view;
+      canvas.dataset.rendered="true";
+    };
+    if(asset.image.complete && asset.image.naturalWidth){draw(asset.image);return Promise.resolve();}
+    return asset.loaded.then(draw);
   }
-  window.VerandaPreview={ render, ready };
+  window.VerandaPreview={render,ready};
 })();
