@@ -22,7 +22,7 @@
   <main class="wrap">
     <div class="page-intro">
       <h1>Stel je veranda samen<span>.</span></h1>
-      <p class="lead">Kies de kleur, het dak en de afwerking. Je ziet je veranda bij elke stap mee veranderen.</p>
+      <p class="lead">Kies de kleur, het dak en de afwerking van je veranda.</p>
     </div>
     <div id="configurator">
       <nav class="step-nav" aria-label="Stappen">
@@ -33,52 +33,36 @@
         <button type="button" data-step="5"><span>5</span>Maten</button>
       </nav>
       <div class="workspace">
-      <figure class="gallery" id="gallery" aria-label="Je samengestelde veranda">
-        <canvas id="preview-canvas" width="1200" height="800" aria-label="Visueel voorbeeld van je gekozen veranda" aria-describedby="preview-description">Het overzicht aan het einde toont alle onderdelen van je veranda.</canvas>
-        <button type="button" class="circle photo-expand" id="expand-picture" aria-label="Voorbeeld vergroten" title="Voorbeeld vergroten"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M8.8 4.5H4.5v4.3m10.7-4.3h4.3v4.3M4.5 15.2v4.3h4.3m10.7-4.3v4.3h-4.3"/></svg></button>
-        <figcaption class="size-caption"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none"><path d="m3 15 12-12 6 6L9 21zM7 11l2 2m1-5 2 2m1-5 2 2"/></svg><span id="current-size">500 × 300 cm</span></figcaption>
-        <span class="sr-only" id="preview-description" aria-live="polite" aria-atomic="true"></span>
-      </figure>
-      <section class="choice-panel" aria-label="Keuzemenu">
-        <div id="step-content"></div>
-        <noscript><p>Schakel JavaScript in om de kleuren en materialen te bekijken.</p></noscript>
-        <div id="actions" class="panel-actions">
-          <span id="step-counter">Stap 1 van 5</span>
-          <button type="button" class="back-button" id="back" hidden>Vorige</button>
-          <button type="button" class="primary-button" id="next">Volgende</button>
-        </div>
-      </section>
+        <figure class="gallery" id="gallery" aria-label="Je samengestelde veranda">
+          <canvas id="preview-canvas" width="1200" height="800" aria-label="Visueel voorbeeld van je gekozen veranda" aria-describedby="preview-description">Het overzicht aan het einde toont alle onderdelen van je veranda.</canvas>
+          <button type="button" class="circle photo-expand" id="expand-picture" aria-label="Voorbeeld vergroten" title="Voorbeeld vergroten"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M8.8 4.5H4.5v4.3m10.7-4.3h4.3v4.3M4.5 15.2v4.3h4.3m10.7-4.3v4.3h-4.3"/></svg></button>
+          <figcaption class="size-caption"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none"><path d="m3 15 12-12 6 6L9 21zM7 11l2 2m1-5 2 2m1-5 2 2"/></svg><span id="current-size">500 × 300 cm</span></figcaption>
+          <span class="sr-only" id="preview-description"></span>
+        </figure>
+        <section class="choice-panel" aria-label="Keuzemenu">
+          <div id="step-content"></div>
+          <noscript><p>Schakel JavaScript in om de kleuren en materialen te bekijken.</p></noscript>
+          <div id="actions" class="panel-actions">
+            <span id="step-counter">Stap 1 van 5</span>
+            <button type="button" class="back-button" id="back" hidden>Vorige</button>
+            <button type="button" class="primary-button" id="next">Volgende</button>
+          </div>
+        </section>
       </div>
     </div>
     <footer><span>SENS Consult</span><span>Verandaconfigurator · Demo</span></footer>
   </main>
   <dialog id="photo-dialog" class="photo-dialog" aria-label="Vergroot voorbeeld van jouw veranda">
     <button class="dialog-close" type="button" aria-label="Sluiten">×</button>
-    <canvas id="enlarged-canvas" width="1200" height="800" aria-label="Jouw veranda in het groot"></canvas>
   </dialog>
   <script>
     const preview = document.getElementById('preview-canvas');
-    const cameraPositions = {
-      overview: [1, 0, 0], color: [1.035, 0, 0], roof: [1.18, 0, 7],
-      left: [1.22, 10, -1], right: [1.22, -10, -1], front: [1.09, -2, -2],
-      leftWedge: [1.22, 10, 7], rightWedge: [1.22, -10, 7],
-      shade: [1.16, 0, 6], led: [1.18, -3, 6]
-    };
-    window.VerandaCamera = {
-      focus(part) {
-        const [scale, x, y] = cameraPositions[part] || cameraPositions.overview;
-        preview.style.transform = `translate(${x}%, ${y}%) scale(${scale})`;
-      }
-    };
     const enlarged = document.getElementById('photo-dialog');
     document.getElementById('expand-picture').addEventListener('click', () => {
-      const current = document.getElementById('preview-canvas');
-      const copy = document.getElementById('enlarged-canvas');
-      copy.width = current.width;
-      copy.height = current.height;
-      copy.getContext('2d').drawImage(current, 0, 0);
+      enlarged.append(preview);
       enlarged.showModal();
     });
+    enlarged.addEventListener('close', () => document.getElementById('gallery').prepend(preview));
     enlarged.querySelector('button').addEventListener('click', () => enlarged.close());
     enlarged.addEventListener('click', event => { if (event.target === enlarged) enlarged.close(); });
   </script>

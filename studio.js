@@ -86,7 +86,7 @@
   }
   function focusCamera(field) {
     const target = field === "width" || field === "depth" ? "overview" : field;
-    window.VerandaCamera?.focus(target, effectiveConfig());
+    window.VerandaPreview.setView?.(id("preview-canvas"), target);
   }
   function updatePreview() {
     const current = effectiveConfig();
@@ -98,7 +98,7 @@
     const rows = field.options.map(choice => {
       const current = config[field.key] === choice.value;
       const sample = field.key === "color"
-        ? `<span class="finish-sample" style="--sample-color: ${choice.sample}"></span>`
+        ? `<span class="finish-sample ${choice.value}" style="--sample-color: ${choice.sample}"></span>`
         : `<span class="roof-sample ${choice.value}"></span>`;
       return `<label class="model-row${current ? " is-selected" : ""}">
         <input class="choice-radio" type="radio" name="${field.key}" value="${choice.value}"${current ? " checked" : ""}>
