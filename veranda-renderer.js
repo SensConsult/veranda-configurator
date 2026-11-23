@@ -155,7 +155,7 @@
     const stone=surface(320,320), st=stone.getContext("2d");
     st.fillStyle="#d6c9b9";st.fillRect(0,0,320,320);
     for(let y=0;y<320;y+=80)for(let x=0;x<320;x+=80){
-      st.globalAlpha=.69;
+      st.globalAlpha=.22;
       sample(st,305+random()*175,452+random()*14,46,8,x+1,y+1,79.2,79.2);
       st.globalAlpha=1;st.fillStyle="rgba(157,146,126,.36)";st.fillRect(x,y,80,.92);st.fillRect(x,y,.9,80);
     }
@@ -385,7 +385,7 @@
         }
       }
       }
-      if(!above) panels();
+      panels();
       if(cfg.shade==="met") {
         const extended=d*.77;
         for(let i=0;i<spans;i++) {
@@ -401,7 +401,6 @@
         }
         profile(left,right,extended-1.7,extended+1.7,topAt(extended)-4,topAt(extended)-4,2.9);
       }
-      if(above) panels();
       for(let n=0;n<=spans;n++) {
         const i=eye[0]>0?n:spans-n;
         const x=left+i*span;
