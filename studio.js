@@ -38,12 +38,12 @@
   const colorField = { key: "color", label: "Framekleur", options: colors };
   const roofField = { key: "roof", label: "Dakmateriaal", options: roofs };
   const stages = [
-    { heading: "Kies de framekleur", intro: "Kies de kleur van de aluminium profielen.", fields: [colorField], view: "overview" },
-    { heading: "Kies het dakmateriaal", intro: "Kies het materiaal en de lichtdoorlaatbaarheid van het dak.", fields: [roofField], view: "roof" },
-    { heading: "Kies de wanden", intro: "Een spie sluit de driehoek tussen een zijwand en het schuine dak.", fields: wallFields, view: "front" },
-    { heading: "Kies de extra’s", intro: "Voeg zonwering of verlichting toe aan je veranda.", fields: extras, view: "shade" },
-    { heading: "Kies de afmetingen", intro: "De breedte loopt langs de gevel. De diepte is de afstand vanaf de gevel.", fields: [], view: "overview" },
-    { heading: "Jouw veranda", intro: "Je gekozen uitvoering en afmetingen op een rij.", fields: [], view: "overview" }
+    { heading: "Kies de framekleur", intro: "Kies de kleur van de aluminium profielen.", fields: [colorField] },
+    { heading: "Kies het dakmateriaal", intro: "Kies het materiaal en de lichtdoorlaatbaarheid van het dak.", fields: [roofField] },
+    { heading: "Kies de wanden", intro: "Een spie sluit de driehoek tussen een zijwand en het schuine dak.", fields: wallFields },
+    { heading: "Kies de extra’s", intro: "Voeg zonwering of verlichting toe aan je veranda.", fields: extras },
+    { heading: "Kies de afmetingen", intro: "De breedte loopt langs de gevel. De diepte is de afstand vanaf de gevel.", fields: [] },
+    { heading: "Jouw veranda", intro: "Je gekozen uitvoering en afmetingen op een rij.", fields: [] }
   ];
   const allFields = [colorField, roofField, ...wallFields, ...extras];
   const widths = [300, 350, 400, 450, 500, 550, 600, 650, 700];
@@ -83,10 +83,6 @@
   }
   function effectiveConfig() {
     return { ...config, depth: effectiveDepth() };
-  }
-  function focusCamera(field) {
-    const target = field === "width" || field === "depth" ? "overview" : field;
-    window.VerandaPreview.setView?.(id("preview-canvas"), target);
   }
   function updatePreview() {
     const current = effectiveConfig();
@@ -150,7 +146,6 @@
     (next.querySelector("[data-label], .button-label") || next).textContent =
       step === 6 ? "Opnieuw beginnen" : step === 5 ? "Bekijk overzicht" : "Volgende";
     if (focusHeading) content.querySelector("h2").focus();
-    focusCamera(stage.view);
   }
   function goToStep(number) {
     if (number < 1 || number > stages.length || number === step) return;
@@ -158,9 +153,6 @@
     renderStep(true);
   }
 
-  content.addEventListener("focusin", event => {
-    if (event.target.name) focusCamera(event.target.name);
-  });
   content.addEventListener("change", event => {
     const input = event.target;
     if (input.name === "width" || input.name === "depth") {
@@ -178,7 +170,6 @@
     const note = id("depth-note");
     if (note) note.textContent = depthNote();
     updatePreview();
-    focusCamera(input.name);
   });
   stepButtons.forEach(button => button.addEventListener("click", () => goToStep(Number(button.dataset.step))));
   back.addEventListener("click", () => goToStep(step - 1));
