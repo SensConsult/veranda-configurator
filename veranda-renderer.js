@@ -11,8 +11,8 @@
       matrix:[[0.91052991,-0.085,0,431.16524217],[0.18694017,-0.208,-0.80164315,411.36182336],[0.00053561,-0.00064,0,1]]
     },
     roof: {
-      file:"tuin-dak.webp", crop:[233,109,480], eye:[-542,2281,1255],
-      matrix:[[0.76696672,0.037,-0.09106991,445.40253566],[-0.04331537,0.203,-0.64112704,318.45166403],[0.00017116,-0.00027,-0.00023219,1]]
+      file:"tuin-dak.webp", crop:[233,109,480], eye:[-551,2325,1197],
+      matrix:[[0.76696672,0.037,-0.09106991,445.40253566],[-0.04331537,0.183,-0.64112704,318.45166403],[0.00017116,-0.00027,-0.00023219,1]]
     },
     left: {
       file:"tuin-links.webp", crop:[269,194,449], eye:[-792,1035,140],
@@ -56,7 +56,9 @@
     });
     const asset={image,loaded};
     images.set(name,asset);
-    image.src=new URL(plates[name].file,baseURL).href;
+    const url=new URL(plates[name].file,baseURL);
+    url.search=new URL(baseURL).search;
+    image.src=url.href;
     return asset;
   }
   const ready=loadPlate("overview").loaded;
@@ -282,7 +284,7 @@
     }
     function wedge(which,material) {
       if(material==="geen" || !material) return;
-      const {at}=sidePlane(which), low=eave-10;
+      const {at}=sidePlane(which), low=eave-12;
       const pts=[at(0,low),at(d,low),at(0,topAt(0)-7)];
       if(material==="aluminium") {
         fill(pts,bare);
@@ -359,12 +361,26 @@
     profile(left-2,right+2,-.35,.8,mountingHeight+3.1,mountingHeight+3.1,2.3);
     const near=eye[0]>0?"right":"left",far=near==="left"?"right":"left";
     const sideX=name=>name==="left"?left:right;
-    const sideWall=name=>{wall(name,cfg[name]);wedge(name,cfg[name+"Wedge"]);};
+    function sideWall(name) {
+      const panel=cfg[name], infill=cfg[name+"Wedge"];
+      wall(name,panel);
+      wedge(name,infill);
+      // The rear jamb carries the panel between the paving and the wall rail,
+      // including when the selected width puts it in front of the sliding doors.
+      if ((!panel || panel==="open") && (!infill || infill==="geen")) return;
+      const x=sideX(name);
+      const top=mountingHeight-7;
+      const base=panel && panel!=="open" ? 0 : eave-12;
+      profile(x-2.6,x+2.6,.4,5.1,top,top,top-base);
+    }
     sideWall(far);
     post(sideX(far),d,9,eave-5.8);
     if(!above)roof();
-    if(eye[1]>d || above)wall("front",cfg.front);
+    const seeFront=eye[1]>d;
+    const inFrontOfOpening=eye[0]>=left && eye[0]<=right;
+    if(seeFront && !inFrontOfOpening)wall("front",cfg.front);
     sideWall(near);
+    if(seeFront && inFrontOfOpening)wall("front",cfg.front);
     if(w>=600)post(0,d,9,eave-5.8);
     post(sideX(near),d,9,eave-5.8);
     if(above)roof();
